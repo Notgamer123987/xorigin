@@ -3,147 +3,1088 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CORS PoC Tool — Attacker Dashboard</title>
+<title>xOrigin — CORS PoC Tool</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d0d0d; color: #e0e0e0; font-family: 'Courier New', monospace; min-height: 100vh; padding: 2rem; }
-  h1 { font-size: 1.1rem; color: #ff4444; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
-  .subtitle { font-size: 0.75rem; color: #555; margin-bottom: 2rem; }
-  label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 0.4rem; letter-spacing: 0.05em; }
-  .input-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+  /* ─── Reset & Base ───────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-root:    #0a0c0e;
+    --bg-panel:   #0d1117;
+    --bg-inset:   #080a0c;
+    --bg-input:   #111318;
+    --border:     #1c2128;
+    --border-dim: #161b22;
+    --accent:     #00ff88;
+    --accent-dim: #00c866;
+    --accent-glow:rgba(0,255,136,0.12);
+    --red:        #ff4444;
+    --red-dim:    #cc2222;
+    --red-glow:   rgba(255,68,68,0.10);
+    --amber:      #ffaa00;
+    --text-hi:    #e6edf3;
+    --text-mid:   #8b949e;
+    --text-lo:    #484f58;
+    --font-mono:  'Courier New', 'Consolas', monospace;
+    --radius:     6px;
+    --radius-lg:  10px;
+    --transition: 0.18s ease;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-root);
+    background-image:
+      linear-gradient(rgba(0,255,136,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* ─── Scrollbar ─────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-inset); }
+  ::-webkit-scrollbar-thumb { background: #2a3140; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d4a5c; }
+
+  /* ─── Top Bar ───────────────────────────────────────────────── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,12,14,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    border: 1.5px solid var(--accent);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .logo-icon::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+
+  .logo-text {
+    font-size: 0.9rem;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    color: var(--text-hi);
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .topbar-meta {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    font-size: 0.68rem;
+    color: var(--text-lo);
+    letter-spacing: 0.06em;
+  }
+
+  .status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--accent);
+    font-size: 0.68rem;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1;box-shadow:0 0 8px var(--accent);} 50%{opacity:0.35;box-shadow:none;} }
+
+  /* ─── Layout ────────────────────────────────────────────────── */
+  .layout {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  /* ─── Hero ──────────────────────────────────────────────────── */
+  .hero {
+    padding: 1.5rem 0 0.5rem;
+    border-bottom: 1px solid var(--border-dim);
+    margin-bottom: 0.25rem;
+  }
+
+  .hero-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-title {
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+    color: var(--text-hi);
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+    line-height: 1.2;
+  }
+
+  .hero-title .accent { color: var(--accent); }
+  .hero-title .dim    { color: var(--text-lo); font-weight: normal; }
+
+  .hero-sub {
+    font-size: 0.76rem;
+    color: var(--text-mid);
+    line-height: 1.7;
+    max-width: 560px;
+    margin-bottom: 0.8rem;
+  }
+
+  .hero-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    padding: 3px 9px;
+    border-radius: 3px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-lo);
+    text-transform: uppercase;
+  }
+
+  .badge.green { border-color: rgba(0,255,136,0.25); color: var(--accent-dim); background: rgba(0,255,136,0.05); }
+  .badge.red   { border-color: rgba(255,68,68,0.25);  color: #cc5555;           background: rgba(255,68,68,0.05); }
+
+  /* ─── Panel / Section ───────────────────────────────────────── */
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color var(--transition);
+  }
+
+  .panel:focus-within { border-color: rgba(0,255,136,0.3); }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.2rem;
+    border-bottom: 1px solid var(--border-dim);
+    background: rgba(255,255,255,0.018);
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+
+  .panel-num {
+    font-size: 0.62rem;
+    color: var(--text-lo);
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    letter-spacing: 0.06em;
+  }
+
+  .panel-body { padding: 1.2rem; }
+
+  /* ─── Form Elements ─────────────────────────────────────────── */
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-bottom: 0.45rem;
+  }
+
+  .field-hint {
+    font-size: 0.65rem;
+    color: var(--text-lo);
+    margin-top: 0.35rem;
+    line-height: 1.5;
+  }
+
+  .input-wrap {
+    position: relative;
+    display: flex;
+    gap: 0.5rem;
+  }
+
   input[type="text"] {
-    background: #1a1a1a; border: 1px solid #2a2a2a; color: #e0e0e0;
-    padding: 0.6rem 0.8rem; font-family: 'Courier New', monospace;
-    font-size: 0.85rem; border-radius: 4px; flex: 1; outline: none;
-    transition: border-color 0.2s;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-hi);
+    padding: 0.6rem 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    border-radius: var(--radius);
+    flex: 1;
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    min-width: 0;
   }
-  input[type="text"]:focus { border-color: #ff4444; }
+
+  input[type="text"]::placeholder { color: var(--text-lo); }
+
+  input[type="text"]:focus {
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+
   select {
-    background: #1a1a1a; border: 1px solid #2a2a2a; color: #e0e0e0;
-    padding: 0.6rem 0.8rem; font-family: 'Courier New', monospace;
-    font-size: 0.85rem; border-radius: 4px; outline: none; cursor: pointer;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-hi);
+    padding: 0.6rem 0.85rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    border-radius: var(--radius);
+    outline: none;
+    cursor: pointer;
+    transition: border-color var(--transition);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23484f58' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    padding-right: 2rem;
   }
+
+  select:focus { border-color: var(--accent-dim); outline: none; box-shadow: 0 0 0 2px var(--accent-glow); }
+
+  /* ─── Checkbox ──────────────────────────────────────────────── */
+  .checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 0.2rem;
+  }
+
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .checkbox-row label {
+    font-size: 0.78rem;
+    color: var(--text-mid);
+    cursor: pointer;
+    line-height: 1.5;
+  }
+
+  .checkbox-row label code {
+    color: var(--accent-dim);
+    background: rgba(0,255,136,0.07);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+  }
+
+  /* ─── Tags / Preset chips ───────────────────────────────────── */
+  .tag-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+
+  .tag {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 0.66rem;
+    color: var(--text-lo);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: border-color var(--transition), color var(--transition), background var(--transition);
+    user-select: none;
+  }
+
+  .tag:hover {
+    border-color: var(--accent-dim);
+    color: var(--accent);
+    background: rgba(0,255,136,0.05);
+  }
+
+  /* ─── Divider ───────────────────────────────────────────────── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border-dim);
+    margin: 1rem 0;
+  }
+
+  /* ─── Buttons ───────────────────────────────────────────────── */
+  .btn-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.2rem;
+  }
+
   button {
-    background: #ff4444; border: none; color: #fff;
-    padding: 0.6rem 1.2rem; font-family: 'Courier New', monospace;
-    font-size: 0.85rem; border-radius: 4px; cursor: pointer;
-    transition: background 0.2s; white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    padding: 0.6rem 1.2rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--transition), box-shadow var(--transition), transform var(--transition);
+    white-space: nowrap;
+    text-transform: uppercase;
   }
-  button:hover { background: #cc2222; }
-  button.secondary {
-    background: #1a1a1a; border: 1px solid #2a2a2a; color: #888;
+
+  button:hover {
+    background: var(--accent-dim);
+    box-shadow: 0 0 16px rgba(0,255,136,0.25);
+    transform: translateY(-1px);
   }
-  button.secondary:hover { background: #222; color: #ccc; }
-  .section { background: #111; border: 1px solid #1e1e1e; border-radius: 6px; padding: 1.2rem; margin-bottom: 1rem; }
-  .section-title { font-size: 0.7rem; color: #555; letter-spacing: 0.12em; margin-bottom: 1rem; text-transform: uppercase; }
+
+  button:active { transform: translateY(0); box-shadow: none; }
+
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  button.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    font-weight: normal;
+    box-shadow: none;
+  }
+
+  button.btn-ghost:hover {
+    border-color: var(--text-lo);
+    color: var(--text-hi);
+    background: rgba(255,255,255,0.03);
+    box-shadow: none;
+    transform: none;
+  }
+
+  button.btn-danger {
+    background: transparent;
+    border: 1px solid rgba(255,68,68,0.3);
+    color: #cc5555;
+    font-weight: normal;
+    box-shadow: none;
+  }
+
+  button.btn-danger:hover {
+    background: rgba(255,68,68,0.08);
+    border-color: var(--red);
+    color: var(--red);
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ─── Generated link box ────────────────────────────────────── */
   .link-box {
-    background: #0d1a0d; border: 1px solid #1a3a1a; border-radius: 4px;
-    padding: 0.8rem; font-size: 0.8rem; color: #44ff88; word-break: break-all;
-    display: none; margin-top: 0.8rem; cursor: pointer; position: relative;
+    display: none;
+    margin-top: 1rem;
+    background: rgba(0,255,136,0.04);
+    border: 1px solid rgba(0,255,136,0.2);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    position: relative;
+    transition: border-color var(--transition), background var(--transition);
+    animation: fadeSlide 0.25s ease;
   }
-  .link-box:hover { border-color: #44ff88; }
-  .copy-hint { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); font-size: 0.7rem; color: #44ff88; opacity: 0.6; }
-  .log { background: #080808; border: 1px solid #1a1a1a; border-radius: 4px; padding: 1rem; min-height: 200px; max-height: 400px; overflow-y: auto; font-size: 0.8rem; }
-  .log-entry { margin-bottom: 0.8rem; border-bottom: 1px solid #111; padding-bottom: 0.8rem; }
-  .log-entry:last-child { border-bottom: none; margin-bottom: 0; }
-  .log-time { color: #555; font-size: 0.7rem; margin-bottom: 0.3rem; }
-  .log-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; font-weight: bold; margin-bottom: 0.5rem; }
-  .status-vuln { background: #3a0000; color: #ff4444; }
-  .status-blocked { background: #0d1a00; color: #44ff88; }
-  .status-waiting { background: #1a1a00; color: #ffaa00; }
-  .log-key { color: #888; font-size: 0.75rem; }
-  .log-val { color: #e0e0e0; font-size: 0.8rem; word-break: break-all; }
-  .log-val.danger { color: #ff4444; }
-  .log-val.safe { color: #44ff88; }
-  .log-data { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 3px; padding: 0.6rem; margin-top: 0.5rem; color: #cccc44; font-size: 0.75rem; white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
-  .empty-log { color: #333; font-size: 0.8rem; text-align: center; padding: 2rem; }
-  .tag-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
-  .tag { background: #1a1a1a; border: 1px solid #2a2a2a; padding: 2px 8px; border-radius: 3px; font-size: 0.7rem; color: #666; cursor: pointer; }
-  .tag:hover { border-color: #ff4444; color: #ff4444; }
-  .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
-  input[type="checkbox"] { accent-color: #ff4444; }
-  .checkbox-row label { margin: 0; font-size: 0.8rem; color: #888; cursor: pointer; }
-  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff4444; margin-right: 0.4rem; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  .listening-badge { font-size: 0.7rem; color: #44ff88; display: flex; align-items: center; }
-  hr { border: none; border-top: 1px solid #1a1a1a; margin: 1rem 0; }
-  .clear-btn { float: right; margin-top: -0.2rem; }
+
+  @keyframes fadeSlide { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+  .link-box:hover {
+    border-color: rgba(0,255,136,0.4);
+    background: rgba(0,255,136,0.07);
+  }
+
+  .link-box-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-dim);
+    margin-bottom: 0.4rem;
+  }
+
+  .link-text {
+    font-size: 0.78rem;
+    color: var(--accent);
+    word-break: break-all;
+    line-height: 1.5;
+    padding-right: 4rem;
+  }
+
+  .copy-hint {
+    position: absolute;
+    right: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.65rem;
+    color: var(--accent-dim);
+    opacity: 0.7;
+    white-space: nowrap;
+    transition: opacity var(--transition);
+  }
+
+  .link-box:hover .copy-hint { opacity: 1; }
+
+  /* ─── Log / Captured data ───────────────────────────────────── */
+  .listening-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .log {
+    background: var(--bg-inset);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius);
+    min-height: 220px;
+    max-height: 480px;
+    overflow-y: auto;
+    font-size: 0.78rem;
+  }
+
+  .empty-log {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 220px;
+    color: var(--text-lo);
+    font-size: 0.78rem;
+    text-align: center;
+    padding: 2rem;
+    line-height: 1.6;
+  }
+
+  .empty-log svg { opacity: 0.3; }
+
+  .log-entry {
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--border-dim);
+    transition: background 0.15s;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:translateX(0)} }
+
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry:hover { background: rgba(255,255,255,0.015); }
+
+  .log-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .log-time {
+    font-size: 0.65rem;
+    color: var(--text-lo);
+    letter-spacing: 0.04em;
+  }
+
+  .log-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 2px 9px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .status-vuln {
+    background: rgba(255,68,68,0.12);
+    border: 1px solid rgba(255,68,68,0.3);
+    color: var(--red);
+  }
+
+  .status-blocked {
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.25);
+    color: var(--accent);
+  }
+
+  .log-grid {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0.25rem 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .log-key {
+    font-size: 0.68rem;
+    color: var(--text-lo);
+    letter-spacing: 0.06em;
+    padding-top: 1px;
+    text-align: right;
+    padding-right: 0.5rem;
+    border-right: 1px solid var(--border-dim);
+  }
+
+  .log-val {
+    font-size: 0.75rem;
+    color: var(--text-hi);
+    word-break: break-all;
+    line-height: 1.4;
+    padding-left: 0.3rem;
+  }
+
+  .log-val.danger { color: var(--red); }
+  .log-val.safe   { color: var(--accent); }
+  .log-val.amber  { color: var(--amber); }
+
+  .log-headers {
+    margin-top: 0.5rem;
+  }
+
+  .log-headers-title {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-bottom: 0.4rem;
+  }
+
+  .header-row {
+    display: flex;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    margin-bottom: 0.2rem;
+    flex-wrap: wrap;
+  }
+
+  .header-key { color: var(--text-lo); }
+  .header-val { color: var(--text-hi); word-break: break-all; }
+  .header-val.danger { color: var(--red); }
+
+  .log-data {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.65rem 0.8rem;
+    margin-top: 0.6rem;
+    color: #d4af37;
+    font-size: 0.72rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 180px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+
+  .verdict-row {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+
+  .verdict-row.vuln  { background: rgba(255,68,68,0.06);   border-left: 2px solid var(--red);    color: #cc6666; }
+  .verdict-row.safe  { background: rgba(0,255,136,0.05);   border-left: 2px solid var(--accent);  color: #55aa77; }
+
+  /* ─── How-to steps ──────────────────────────────────────────── */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+
+  .step {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--border-dim);
+    transition: background 0.15s;
+  }
+
+  .step:last-child { border-bottom: none; }
+  .step:hover { background: rgba(255,255,255,0.012); margin: 0 -1.2rem; padding-left: 1.2rem; padding-right: 1.2rem; }
+
+  .step-num {
+    min-width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--bg-inset);
+    border: 1px solid rgba(0,255,136,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--accent);
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+    box-shadow: 0 0 10px rgba(0,255,136,0.08);
+  }
+
+  .step-title {
+    font-size: 0.82rem;
+    color: var(--text-hi);
+    margin-bottom: 0.3rem;
+    letter-spacing: 0.02em;
+  }
+
+  .step-body {
+    font-size: 0.73rem;
+    color: var(--text-mid);
+    line-height: 1.65;
+  }
+
+  .step-body .hl-green  { color: var(--accent); }
+  .step-body .hl-amber  { color: var(--amber); }
+  .step-body .hl-red    { color: var(--red); }
+
+  /* ─── Ethics panel ──────────────────────────────────────────── */
+  .ethics-panel {
+    background: rgba(0,255,136,0.03);
+    border: 1px solid rgba(0,255,136,0.12);
+    border-radius: var(--radius-lg);
+  }
+
+  .ethics-panel .panel-header { border-color: rgba(0,255,136,0.1); }
+  .ethics-panel .panel-title  { color: var(--accent-dim); }
+
+  .ethics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .ethics-item {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.74rem;
+    color: #4d7a5d;
+    line-height: 1.65;
+  }
+
+  .ethics-item .check {
+    color: var(--accent-dim);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .ethics-item strong { color: #6aaa7a; }
+
+  .ethics-footer {
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(0,255,136,0.08);
+    font-size: 0.7rem;
+    color: #334d3e;
+    line-height: 1.7;
+  }
+
+  /* ─── Footer ────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.65rem;
+    color: var(--text-lo);
+    letter-spacing: 0.07em;
+    border-top: 1px solid var(--border-dim);
+    margin-top: 1rem;
+  }
+
+  /* ─── Responsive ────────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .topbar { padding: 0.6rem 1rem; }
+    .topbar-meta { display: none; }
+    .layout { padding: 1.2rem 1rem 3rem; gap: 1rem; }
+    .log-grid { grid-template-columns: 1fr; }
+    .log-key { text-align: left; border-right: none; border-bottom: 1px solid var(--border-dim); padding-right: 0; padding-bottom: 0.1rem; }
+    .log-val { padding-left: 0; }
+    .btn-row { flex-direction: column; }
+    button { justify-content: center; }
+    .hero-title { font-size: 1.2rem; }
+  }
+
+  @media (max-width: 400px) {
+    input[type="text"] { font-size: 0.75rem; }
+  }
+
+  /* ─── Focus visible ─────────────────────────────────────────── */
+  :focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
 </style>
 </head>
 <body>
 
-<h1>// CORS PoC Tool</h1>
-<p class="subtitle">bug bounty proof-of-concept generator — attacker dashboard</p>
+<!-- ── Top bar ─────────────────────────────────────────────── -->
+<header class="topbar" role="banner">
+  <div class="logo">
+    <div class="logo-icon" aria-hidden="true"></div>
+    <span class="logo-text">x<span>Origin</span></span>
+  </div>
+  <div class="topbar-meta">
+    <span>CORS PoC Tool</span>
+    <span>v2.0</span>
+    <span class="status-dot"><span class="dot"></span>LIVE</span>
+  </div>
+</header>
 
-<div class="section">
-  <div class="section-title">01 — Target Configuration</div>
+<!-- ── Main layout ─────────────────────────────────────────── -->
+<main class="layout" role="main">
 
-  <label>TARGET ENDPOINT URL</label>
-  <input type="text" id="endpoint" placeholder="https://api.target.com/api/v1/users/me" value="https://gp11022025-api.superdrug.com/api/v1/clients/11028" />
-  <div class="tag-row">
-    <span class="tag" onclick="setEndpoint('https://gp11022025-api.superdrug.com/api/v1/clients/11028')">superdrug /clients</span>
-    <span class="tag" onclick="setEndpoint('')">+ custom</span>
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-label">Security Research Tool</div>
+    <h1 class="hero-title">
+      <span class="accent">CORS</span> Misconfiguration
+      <span class="dim">/ Proof-of-Concept Generator</span>
+    </h1>
+    <p class="hero-sub">
+      Generate a silent victim payload link, fire a cross-origin request against a target endpoint,
+      and capture the CORS response headers and body in real time — all locally, in-browser,
+      with zero external data transfer.
+    </p>
+    <div class="hero-tags">
+      <span class="badge green">Bug Bounty</span>
+      <span class="badge green">Authorized Testing Only</span>
+      <span class="badge">BroadcastChannel</span>
+      <span class="badge">No Server</span>
+      <span class="badge red">Ethical Use Required</span>
+    </div>
   </div>
 
-  <hr>
+  <!-- ── 01 Target Configuration ─────────────────────────── -->
+  <section class="panel" aria-labelledby="section-target">
+    <div class="panel-header">
+      <div class="panel-title">
+        <span class="panel-num">01</span>
+        <span id="section-target">Target Configuration</span>
+      </div>
+    </div>
+    <div class="panel-body">
 
-  <label style="margin-top:0.8rem">REQUEST METHOD</label>
-  <select id="method">
-    <option value="GET">GET</option>
-    <option value="POST">POST</option>
-    <option value="PUT">PUT</option>
-    <option value="DELETE">DELETE</option>
-  </select>
+      <div class="field">
+        <label class="field-label" for="endpoint">Target Endpoint URL</label>
+        <div class="input-wrap">
+          <input type="text" id="endpoint"
+            placeholder="https://api.target.com/api/v1/users/me"
+            value="https://gp11022025-api.superdrug.com/api/v1/clients/11028"
+            autocomplete="off" spellcheck="false" aria-describedby="endpoint-hint" />
+        </div>
+        <div class="field-hint" id="endpoint-hint">The API endpoint to test for CORS misconfiguration.</div>
+        <div class="tag-row" role="group" aria-label="Preset endpoints">
+          <button class="tag" type="button" onclick="setEndpoint('https://gp11022025-api.superdrug.com/api/v1/clients/11028')">superdrug /clients</button>
+          <button class="tag" type="button" onclick="setEndpoint('')">+ custom</button>
+        </div>
+      </div>
 
-  <div class="checkbox-row">
-    <input type="checkbox" id="withCreds" checked />
-    <label for="withCreds">Include credentials (cookies / session tokens) — credentials: 'include'</label>
-  </div>
+      <hr class="divider">
 
-  <hr>
+      <div class="field">
+        <label class="field-label" for="method">Request Method</label>
+        <select id="method" aria-label="HTTP request method">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+      </div>
 
-  <label>VICTIM REDIRECT URL (where victim lands after payload fires)</label>
-  <input type="text" id="redirectUrl" placeholder="https://google.com" value="https://google.com" />
+      <div class="field">
+        <div class="checkbox-row">
+          <input type="checkbox" id="withCreds" checked />
+          <label for="withCreds">
+            Include credentials (cookies / session tokens) —
+            <code>credentials: 'include'</code>
+          </label>
+        </div>
+      </div>
 
-  <hr>
+      <hr class="divider">
 
-  <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.2rem">
-    <button onclick="generateLink()">Generate victim link</button>
-    <button class="secondary" onclick="clearLog()">Clear results</button>
-  </div>
+      <div class="field">
+        <label class="field-label" for="redirectUrl">Victim Redirect URL</label>
+        <input type="text" id="redirectUrl"
+          placeholder="https://google.com"
+          value="https://google.com"
+          autocomplete="off" spellcheck="false"
+          aria-describedby="redirect-hint" />
+        <div class="field-hint" id="redirect-hint">Where the victim page silently redirects after the payload fires.</div>
+      </div>
 
-  <div class="link-box" id="linkBox" onclick="copyLink()">
-    <span id="linkText"></span>
-    <span class="copy-hint">click to copy</span>
-  </div>
-</div>
+      <hr class="divider">
 
-<div class="section">
-  <div class="section-title" style="display:flex; justify-content:space-between; align-items:center">
-    <span>02 — Captured Data</span>
-    <span class="listening-badge"><span class="pulse"></span>listening</span>
-  </div>
+      <div class="btn-row">
+        <button type="button" onclick="generateLink()" aria-label="Generate victim link">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/><path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/></svg>
+          Generate Victim Link
+        </button>
+        <button type="button" class="btn-danger" onclick="clearLog()" aria-label="Clear captured results">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0V5zm3 0a.5.5 0 0 1 1 0v7a.5.5 0 0 1-1 0V5z"/></svg>
+          Clear Results
+        </button>
+      </div>
 
-  <div class="log" id="log">
-    <div class="empty-log" id="emptyMsg">No data captured yet. Generate a victim link and open it in a new tab.</div>
-  </div>
-</div>
+      <div class="link-box" id="linkBox" onclick="copyLink()" role="button" tabindex="0"
+           aria-label="Generated victim link — click to copy"
+           onkeydown="if(event.key==='Enter'||event.key===' ')copyLink()">
+        <div class="link-box-label">Generated Victim Link</div>
+        <div class="link-text" id="linkText"></div>
+        <span class="copy-hint" id="copyHint">⎘ click to copy</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── 02 Captured Data ─────────────────────────────────── -->
+  <section class="panel" aria-labelledby="section-capture">
+    <div class="panel-header">
+      <div class="panel-title">
+        <span class="panel-num">02</span>
+        <span id="section-capture">Captured Data</span>
+      </div>
+      <div class="listening-row">
+        <span class="status-dot" aria-live="polite" aria-label="Listening for data">
+          <span class="dot"></span>
+          <span style="font-size:0.66rem;letter-spacing:0.1em;">LISTENING</span>
+        </span>
+      </div>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div class="log" id="log" role="log" aria-live="polite" aria-label="CORS test results">
+        <div class="empty-log" id="emptyMsg">
+          <svg width="32" height="32" viewBox="0 0 16 16" fill="#484f58" aria-hidden="true">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+            <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+          </svg>
+          <span>No data captured yet.</span>
+          <span style="color:var(--text-lo);font-size:0.7rem">Generate a victim link and open it in a new tab<br>while logged into the target site.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 03 How to Use ────────────────────────────────────── -->
+  <section class="panel" aria-labelledby="section-howto">
+    <div class="panel-header">
+      <div class="panel-title">
+        <span class="panel-num">03</span>
+        <span id="section-howto">How to Use</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="steps">
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">1</div>
+          <div>
+            <div class="step-title">Host on GitHub Pages</div>
+            <div class="step-body">
+              Upload both <span class="hl-amber">index.html</span> and <span class="hl-amber">victim.html</span>
+              to a GitHub repository. Go to <strong>Settings → Pages</strong> → set source to the main branch.
+              Your tool will be live at
+              <span class="hl-green">https://yourusername.github.io/reponame/</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">2</div>
+          <div>
+            <div class="step-title">Open the Dashboard (this page)</div>
+            <div class="step-body">
+              Navigate to your GitHub Pages URL. This is your attacker dashboard — it listens for
+              data in real time via BroadcastChannel.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">3</div>
+          <div>
+            <div class="step-title">Configure Your Target</div>
+            <div class="step-body">
+              Paste the vulnerable API endpoint URL. Set method to <span class="hl-amber">GET</span>
+              (most common for CORS leaks). Check <span class="hl-amber">Include credentials</span>
+              if the endpoint requires login. Set redirect to any site — the victim lands there
+              after the payload fires.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">4</div>
+          <div>
+            <div class="step-title">Generate the Victim Link</div>
+            <div class="step-body">
+              Click <span class="hl-red">Generate Victim Link</span>. This creates a URL pointing
+              to <span class="hl-amber">victim.html</span> with all parameters encoded.
+              Click the green box to copy it to your clipboard.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">5</div>
+          <div>
+            <div class="step-title">Simulate the Victim (for PoC)</div>
+            <div class="step-body">
+              While logged into the target site in the same browser, open the victim link in a
+              <span class="hl-amber">new tab</span>. The page fires the CORS request silently and
+              redirects. Keep the dashboard tab open — data arrives automatically.
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num" aria-hidden="true">6</div>
+          <div>
+            <div class="step-title">Screen Record &amp; Submit</div>
+            <div class="step-body">
+              Record the full flow — dashboard open, victim link opened in a new tab, data appearing
+              in the Captured Data panel. This is your video PoC. Submit it with your report on
+              <span class="hl-green">Intigriti</span> / <span class="hl-green">HackerOne</span>.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 Ethical Use Policy ────────────────────────────── -->
+  <section class="panel ethics-panel" aria-labelledby="section-ethics">
+    <div class="panel-header">
+      <div class="panel-title">
+        <span class="panel-num">04</span>
+        <span id="section-ethics">Ethical Use Policy</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <p style="font-size:0.76rem;color:#4d7a5d;margin-bottom:1rem;line-height:1.6;">
+        This tool is built exclusively for
+        <strong style="color:var(--accent-dim)">bug bounty research and authorized security testing</strong>.
+        By using it, you agree to the following:
+      </p>
+      <div class="ethics-list">
+        <div class="ethics-item"><span class="check">✓</span><span>Only test endpoints on programs where you have <strong>explicit written authorization</strong> — active bug bounty programs, your own infrastructure, or private scopes you are invited to.</span></div>
+        <div class="ethics-item"><span class="check">✓</span><span>Do not use the victim link to target real users without their knowledge outside of a controlled PoC demo you run yourself.</span></div>
+        <div class="ethics-item"><span class="check">✓</span><span>Do not use this tool to extract, store, or share real user PII beyond what is minimally necessary to demonstrate vulnerability impact in your report.</span></div>
+        <div class="ethics-item"><span class="check">✓</span><span>Disclose all findings responsibly through the program's official channel — Intigriti, HackerOne, Bugcrowd, or direct vendor disclosure. Do not publish before a fix is deployed.</span></div>
+        <div class="ethics-item"><span class="check">✓</span><span>Delete any captured sensitive data after your report is submitted and acknowledged.</span></div>
+        <div class="ethics-item"><span class="check">✓</span><span>Unauthorized access to computer systems is illegal in most jurisdictions under laws including the Computer Fraud and Abuse Act (US), Computer Misuse Act (UK), and equivalent statutes worldwide. Misuse of this tool is entirely your legal responsibility.</span></div>
+      </div>
+      <div class="ethics-footer">
+        This tool performs no persistent storage, no external data exfiltration, and sends no data
+        to any server. All communication happens locally in your browser via BroadcastChannel.
+        The code is fully readable — audit it yourself.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  xOrigin — CORS PoC Tool &nbsp;·&nbsp; For authorized security research only &nbsp;·&nbsp; All data stays local
+</footer>
 
 <script>
 const channel = new BroadcastChannel('cors_poc_channel');
-const log = document.getElementById('log');
-const emptyMsg = document.getElementById('emptyMsg');
+const logEl   = document.getElementById('log');
 let resultCount = 0;
 
-function setEndpoint(url){ document.getElementById('endpoint').value = url; }
+/* ── Helpers ─────────────────────────────────────────────── */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
-function generateLink(){
-  const endpoint = document.getElementById('endpoint').value.trim();
-  const method = document.getElementById('method').value;
+function setEndpoint(url) {
+  document.getElementById('endpoint').value = url;
+  document.getElementById('endpoint').focus();
+}
+
+/* ── Generate link ───────────────────────────────────────── */
+function generateLink() {
+  const endpoint  = document.getElementById('endpoint').value.trim();
+  const method    = document.getElementById('method').value;
   const withCreds = document.getElementById('withCreds').checked;
-  const redirect = document.getElementById('redirectUrl').value.trim();
+  const redirect  = document.getElementById('redirectUrl').value.trim();
 
-  if(!endpoint){ alert('Enter a target endpoint URL first.'); return; }
+  if (!endpoint) {
+    document.getElementById('endpoint').focus();
+    document.getElementById('endpoint').style.borderColor = 'var(--red)';
+    setTimeout(() => { document.getElementById('endpoint').style.borderColor = ''; }, 1800);
+    return;
+  }
 
   const params = new URLSearchParams({
     endpoint,
@@ -152,142 +1093,128 @@ function generateLink(){
     redirect: redirect || 'https://google.com'
   });
 
-  const victimUrl = window.location.origin + window.location.pathname.replace('index.html','') + 'victim.html?' + params.toString();
+  const victimUrl = window.location.origin
+    + window.location.pathname.replace('index.html', '')
+    + 'victim.html?' + params.toString();
+
   const box = document.getElementById('linkBox');
   document.getElementById('linkText').textContent = victimUrl;
   box.style.display = 'block';
+  document.getElementById('copyHint').textContent = '⎘ click to copy';
 }
 
-function copyLink(){
+/* ── Copy link ───────────────────────────────────────────── */
+function copyLink() {
   const text = document.getElementById('linkText').textContent;
+  if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
-    const hint = document.querySelector('.copy-hint');
-    hint.textContent = 'copied!';
-    setTimeout(()=>{ hint.textContent = 'click to copy'; }, 1500);
+    const hint = document.getElementById('copyHint');
+    hint.textContent = '✓ Copied!';
+    setTimeout(() => { hint.textContent = '⎘ click to copy'; }, 1800);
+  }).catch(() => {
+    /* fallback */
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
   });
 }
 
-function clearLog(){
+/* ── Clear log ───────────────────────────────────────────── */
+function clearLog() {
   resultCount = 0;
-  log.innerHTML = '<div class="empty-log" id="emptyMsg">No data captured yet. Generate a victim link and open it in a new tab.</div>';
+  logEl.innerHTML = `
+    <div class="empty-log" id="emptyMsg">
+      <svg width="32" height="32" viewBox="0 0 16 16" fill="#484f58" aria-hidden="true">
+        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+        <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+      </svg>
+      <span>No data captured yet.</span>
+      <span style="color:var(--text-lo);font-size:0.7rem">Generate a victim link and open it in a new tab<br>while logged into the target site.</span>
+    </div>`;
 }
 
+/* ── Receive results ─────────────────────────────────────── */
 channel.onmessage = (event) => {
   const data = event.data;
   resultCount++;
+
   const emptyEl = document.getElementById('emptyMsg');
-  if(emptyEl) emptyEl.remove();
+  if (emptyEl) emptyEl.remove();
+
+  const isVuln  = data.vulnerable === true;
+  const timestamp = new Date(data.timestamp).toLocaleTimeString([], { hour12: false });
+
+  /* ── Header rows ── */
+  let headerRows = '';
+  if (data.headers && Object.keys(data.headers).length > 0) {
+    for (const [k, v] of Object.entries(data.headers)) {
+      const isDanger = k.toLowerCase().includes('access-control');
+      headerRows += `
+        <div class="header-row">
+          <span class="header-key">${escapeHtml(k)}:</span>
+          <span class="header-val ${isDanger ? 'danger' : ''}">${escapeHtml(v)}</span>
+        </div>`;
+    }
+  } else {
+    headerRows = '<span style="font-size:0.7rem;color:var(--text-lo)">none returned</span>';
+  }
+
+  /* ── Response body ── */
+  let dataBlock = '';
+  if (data.responseBody) {
+    const bodyStr = typeof data.responseBody === 'object'
+      ? JSON.stringify(data.responseBody, null, 2)
+      : data.responseBody;
+    dataBlock = `
+      <div style="margin-top:0.5rem">
+        <div class="log-headers-title">Leaked Response Body</div>
+        <div class="log-data">${escapeHtml(bodyStr)}</div>
+      </div>`;
+  }
 
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-
-  const isVuln = data.vulnerable === true;
-  const timestamp = new Date(data.timestamp).toLocaleTimeString();
-
-  let headerRows = '';
-  if(data.headers){
-    for(const [k,v] of Object.entries(data.headers)){
-      const isDanger = k.toLowerCase().includes('access-control');
-      headerRows += `<div><span class="log-key">${k}: </span><span class="log-val ${isDanger ? 'danger':''}">${v}</span></div>`;
-    }
-  }
-
-  let dataBlock = '';
-  if(data.responseBody){
-    dataBlock = `<div style="margin-top:0.5rem"><div class="log-key" style="margin-bottom:0.3rem">LEAKED RESPONSE BODY:</div><div class="log-data">${escapeHtml(typeof data.responseBody === 'object' ? JSON.stringify(data.responseBody, null, 2) : data.responseBody)}</div></div>`;
-  }
-
   entry.innerHTML = `
-    <div class="log-time">#${resultCount} — ${timestamp}</div>
-    <span class="log-status ${isVuln ? 'status-vuln' : 'status-blocked'}">${isVuln ? '⚠ VULNERABLE' : '✓ BLOCKED'}</span>
-    <div><span class="log-key">endpoint: </span><span class="log-val">${escapeHtml(data.endpoint || '')}</span></div>
-    <div><span class="log-key">method: </span><span class="log-val">${escapeHtml(data.method || 'GET')}</span></div>
-    <div><span class="log-key">credentials: </span><span class="log-val">${data.withCreds ? 'include' : 'omit'}</span></div>
-    <div><span class="log-key">http status: </span><span class="log-val">${data.status || 'N/A'}</span></div>
-    <div style="margin-top:0.5rem"><div class="log-key" style="margin-bottom:0.3rem">CORS HEADERS:</div>${headerRows || '<span class="log-val" style="color:#444">none returned</span>'}</div>
+    <div class="log-entry-header">
+      <span class="log-time">#${resultCount} &nbsp;·&nbsp; ${timestamp}</span>
+      <span class="log-status ${isVuln ? 'status-vuln' : 'status-blocked'}">
+        ${isVuln ? '⚠ Vulnerable' : '✓ Blocked'}
+      </span>
+    </div>
+
+    <div class="log-grid">
+      <span class="log-key">endpoint</span>
+      <span class="log-val">${escapeHtml(data.endpoint || '')}</span>
+
+      <span class="log-key">method</span>
+      <span class="log-val">${escapeHtml(data.method || 'GET')}</span>
+
+      <span class="log-key">credentials</span>
+      <span class="log-val ${data.withCreds ? 'amber' : ''}">${data.withCreds ? 'include' : 'omit'}</span>
+
+      <span class="log-key">http status</span>
+      <span class="log-val">${escapeHtml(String(data.status || 'N/A'))}</span>
+    </div>
+
+    <div class="log-headers">
+      <div class="log-headers-title">CORS Headers</div>
+      ${headerRows}
+    </div>
+
     ${dataBlock}
-    <div style="margin-top:0.5rem"><span class="log-key">verdict: </span><span class="log-val ${isVuln ? 'danger' : 'safe'}">${data.verdict || ''}</span></div>
-  `;
 
-  log.insertBefore(entry, log.firstChild);
+    <div class="verdict-row ${isVuln ? 'vuln' : 'safe'}">
+      ${escapeHtml(data.verdict || '')}
+    </div>`;
+
+  logEl.insertBefore(entry, logEl.firstChild);
 };
-
-function escapeHtml(str){
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 </script>
-
-<div class="section" style="margin-top:1rem">
-  <div class="section-title">03 — How to Use (Step by Step)</div>
-
-  <div style="display:flex; flex-direction:column; gap:1rem;">
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">1</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Host on GitHub Pages</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Upload both <span style="color:#ffaa00">index.html</span> and <span style="color:#ffaa00">victim.html</span> to a GitHub repo. Go to Settings → Pages → set source to main branch. Your tool will be live at <span style="color:#44ff88">https://yourusername.github.io/reponame/</span></div>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">2</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Open the dashboard (this page)</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Navigate to your GitHub Pages URL. This is your attacker dashboard — it listens for data in real time.</div>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">3</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Configure your target</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Paste the vulnerable API endpoint URL. Set method to GET (most common for CORS leaks). Check <span style="color:#ffaa00">Include credentials</span> if the endpoint requires login. Set redirect to any site — victim lands there after payload fires.</div>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">4</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Generate the victim link</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Click <span style="color:#ff4444">Generate victim link</span>. This creates a unique URL pointing to <span style="color:#ffaa00">victim.html</span> with all parameters encoded. Click the green box to copy it.</div>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">5</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Simulate the victim (for PoC)</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">While logged into the target site in the same browser, open the victim link in a <span style="color:#ffaa00">new tab</span>. The page fires the CORS request silently and redirects. Keep the dashboard tab open — data arrives automatically.</div>
-      </div>
-    </div>
-
-    <div style="display:flex; gap:1rem; align-items:flex-start;">
-      <div style="min-width:28px; height:28px; border-radius:50%; background:#1a1a1a; border:1px solid #ff4444; display:flex; align-items:center; justify-content:center; font-size:0.75rem; color:#ff4444; font-weight:bold;">6</div>
-      <div>
-        <div style="font-size:0.85rem; color:#ccc; margin-bottom:0.3rem;">Screen record and submit</div>
-        <div style="font-size:0.75rem; color:#666; line-height:1.6;">Record the full flow — dashboard open, victim link opened in new tab, data appearing in the Captured Data panel. This is your video PoC. Submit it with the report on Intigriti/HackerOne.</div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<div class="section" style="border-color:#1a2a1a; margin-top:1rem">
-  <div class="section-title" style="color:#44ff88">04 — Ethical Use Policy</div>
-  <div style="font-size:0.78rem; color:#556655; line-height:1.8;">
-    <p style="margin-bottom:0.8rem; color:#446644;">This tool is built exclusively for <strong style="color:#44ff88">bug bounty research and authorized security testing</strong>. By using it, you agree to the following:</p>
-    <div style="display:flex; flex-direction:column; gap:0.5rem;">
-      <div>✓ &nbsp;Only test endpoints on programs where you have <strong style="color:#88aa88">explicit written authorization</strong> — active bug bounty programs, your own infrastructure, or private scopes you are invited to.</div>
-      <div>✓ &nbsp;Do not use the victim link to target real users without their knowledge outside of a controlled PoC demo you run yourself.</div>
-      <div>✓ &nbsp;Do not use this tool to extract, store, or share real user PII beyond what is minimally necessary to demonstrate vulnerability impact in your report.</div>
-      <div>✓ &nbsp;Disclose all findings responsibly through the program's official channel — Intigriti, HackerOne, Bugcrowd, or direct vendor disclosure. Do not publish before a fix is deployed.</div>
-      <div>✓ &nbsp;Delete any captured sensitive data after your report is submitted and acknowledged.</div>
-      <div>✓ &nbsp;Unauthorized access to computer systems is illegal in most jurisdictions under laws including the Computer Fraud and Abuse Act (US), Computer Misuse Act (UK), and equivalent statutes worldwide. Misuse of this tool is entirely your legal responsibility.</div>
-    </div>
-    <p style="margin-top:0.8rem; color:#334433;">This tool performs no persistent storage, no external data exfiltration, and sends no data to any server. All communication happens locally in your browser via BroadcastChannel. The code is fully readable — audit it yourself.</p>
-  </div>
-</div>
 
 </body>
 </html>
